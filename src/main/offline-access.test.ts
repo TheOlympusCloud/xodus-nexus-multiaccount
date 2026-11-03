@@ -55,6 +55,15 @@ describe('offline access revocation', () => {
     expect(await fs.readFile(path.join(root, 'offline-owner'), 'utf8')).not.toContain('example');
   });
 
+  it('binds offline data to the Store and Xbox player pair and revokes it when either changes', async () => {
+    const { root, license } = await populated();
+    expect(await bindOfflineAccess(root, 'one@example.test')).toBe(false);
+    expect(await bindOfflineAccess(root, 'one@example.test', 'player@example.test')).toBe(true);
+    expect(await exists(license)).toBe(false);
+    expect(await bindOfflineAccess(root, 'One@Example.test', 'player@example.test')).toBe(false);
+    expect(await bindOfflineAccess(root, 'one@example.test', 'other@example.test')).toBe(true);
+    expect(await bindOfflineAccess(root, 'one@example.test')).toBe(true);
+  });
   it('records the first owner without removing anything', async () => {
     const { root, license } = await populated();
     await fs.rm(path.join(root, 'offline-owner'), { force: true });

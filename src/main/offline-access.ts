@@ -50,15 +50,17 @@ export async function revokeOfflineAccess(dataRoot: string): Promise<void> {
 }
 
 /**
- * Binds stored offline data to the signed-in account before a launch. Data
+ * Binds stored offline data to the signed-in Store account and, when one is
+ * signed in, the separate Xbox player account before a launch. Data
  * another account left behind (a sign-in outside the launcher, or a sign-out
  * whose cleanup failed) is removed first. Returns whether anything was revoked.
  */
-export async function bindOfflineAccess(dataRoot: string, username: string): Promise<boolean> {
+export async function bindOfflineAccess(dataRoot: string, username: string, player?: string): Promise<boolean> {
   if (!username.trim()) throw new Error('Sign in before enabling offline access.');
   const pendingRevocation = await offlineAccessRevoked(dataRoot);
   if (pendingRevocation) await revokeOfflineAccess(dataRoot);
-  const key = accountCacheKey(username);
+  // Licenses belong to the Store account and the runtime identity to the Xbox player: a change to either revokes both.
+  const key = accountCacheKey(player ? `${username.trim()}\n${player.trim()}` : username);
   let owner: string | undefined;
   try { owner = (await fs.readFile(ownerFile(dataRoot), 'utf8')).trim(); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }

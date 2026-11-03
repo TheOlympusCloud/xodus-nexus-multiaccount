@@ -37,6 +37,8 @@ export interface AuthStatus {
   running: boolean;
   stored: boolean | null;
   username?: string;
+  /** Separate Xbox player account when one is signed in; Xbox features use it instead of `username`. */
+  player?: string;
   gamertag?: string;
   avatarDataUrl?: string;
   subscription?: GamePassSubscription;
@@ -582,8 +584,8 @@ export interface LauncherApi {
   readBackendDiagnosticLog(): Promise<DiagnosticLog>;
   createDiagnosticReport(gameId?: string): Promise<DiagnosticReport>;
   saveDiagnosticReport(content: string): Promise<boolean>;
-  login(): Promise<void>;
-  logout(): Promise<void>;
+  login(player?: boolean): Promise<void>;
+  logout(player?: boolean): Promise<void>;
   offlinePermissions(): Promise<OfflinePermissions>;
   setOfflinePermissions(enabled: boolean): Promise<OfflinePermissions>;
   searchCatalog(query: string, cursor?: string): Promise<CatalogSearchResult>;

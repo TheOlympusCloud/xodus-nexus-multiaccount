@@ -146,8 +146,8 @@ let gameGuide:XboxGameGuide;
 let overlayShortcut:XboxOverlayShortcut|undefined;
 const nativeSocialSnapshots:(()=>void)[]=[];
 function nativeSocialConnection(){
- const status=backend?.current;
- return !demoMode&&!authState.running&&authState.stored===true&&authState.username&&status?.available&&status.binaryPath&&status.capabilities.nativeSocial?{account:authState.username,binary:status.binaryPath}:undefined;
+ const status=backend?.current,account=xboxAccount();
+ return !demoMode&&!authState.running&&authState.stored===true&&account&&status?.available&&status.binaryPath&&status.capabilities.nativeSocial?{account,binary:status.binaryPath}:undefined;
 }
 function resetNativeSocial(){for(const reset of nativeSocialResets)reset();xboxNativeSocial?.clear();resetSocialTransport();}
 let nativeSocialBackend:string|undefined;
@@ -222,10 +222,10 @@ const launcherTray=new LauncherTray(()=>{
 
 const walletUnlocker = new WalletUnlocker();
 const xboxSocial = new XboxSocialSessions(() => {
-  const status = backend?.current;
-  return !shutdownStarted && !authState.running && authState.stored === true && authState.username
+  const status = backend?.current, account = xboxAccount();
+  return !shutdownStarted && !authState.running && authState.stored === true && account
     && status?.available && status.binaryPath && status.capabilities.commands.includes('social')
-    ? { account: authState.username, binary: status.binaryPath } : undefined;
+    ? { account, binary: status.binaryPath } : undefined;
 });
 const keyringSupport = new KeyringSupport(process.env, undefined, process.platform, undefined, {
   diagnostic: value => backendDiagnostic({ operation: 'keyring', event: 'diagnostic', keyring: value, elapsedMs: value.elapsedMs }),
@@ -497,12 +497,15 @@ function accountRefreshKey(): string {
   const status = backend.current;
   return JSON.stringify([status.available, status.binaryPath, status.source, status.capabilities, currentMarket()]);
 }
+/** Xbox features use the separate player account when one is signed in, otherwise the Store account. */
+function xboxAccount(): string | undefined { return authState.player ?? authState.username; }
+
 async function refreshAccount(emit = true, afterAuth = false): Promise<AuthStatus> {
   if (authState.running && !afterAuth) return structuredClone(authState);
   const status = backend.current;
   const key = accountRefreshKey();
   await accountRefresh.run(key, async signal => {
-    let next: Pick<AuthStatus, 'stored' | 'username' | 'note'>;
+    let next: Pick<AuthStatus, 'stored' | 'username' | 'player' | 'note'>;
     if (!status.available || !status.binaryPath) {
       next = { stored: null, username: undefined, note: 'Account status is unavailable because the Xodus backend is offline.' };
     } else if (!status.capabilities.account) {
@@ -534,21 +537,29 @@ async function refreshAccount(emit = true, afterAuth = false): Promise<AuthStatu
         } catch {
           next = { stored: null, username: undefined, note: 'Xodus returned an unreadable account-status response.' };
         }
+        if (next.stored === true && status.capabilities.playerAccount) {
+          // Never guess which account Xbox features use from an unreadable player record.
+          const player = await readAccount(status.binaryPath, signal, true).catch(() => ({ code: -1, output: '' }));
+          try {
+            if (player.code !== 0) throw Error('unreadable player account');
+            const account = parseAccount(player.output);
+            if (account.stored) next.player = account.username;
+          } catch {
+            next = { stored: null, username: undefined, note: 'Xodus could not read its system-keychain account record.' };
+          }
+        }
       }
     }
     return next;
   }, async next => {
-    if (authState.username !== next.username || next.stored !== true) xboxSocial.close();
-    if(next.username!==authState.username||next.stored!==true)resetNativeSocial();
-    authState = { ...authState, ...next };
+    const xbox = next.stored === true ? next.player ?? next.username : undefined;
+    if (xboxAccount() !== xbox || next.stored !== true) { xboxSocial.close(); resetNativeSocial(); }
+    authState = { ...authState, player: undefined, ...next };
     accountLibrary.select(authState.stored === true ? authState.username : undefined,
       status.capabilities.library ? status.binaryPath : undefined, currentMarket());
-    gameActivities.select(authState.stored === true ? authState.username : undefined,
-      status.capabilities.gameActivity ? status.binaryPath : undefined);
-    gameAchievements.select(authState.stored === true ? authState.username : undefined,
-      status.capabilities.achievements ? status.binaryPath : undefined);
-    await accountProfile?.select(authState.stored === true ? authState.username : undefined,
-      status.capabilities.profile ? status.binaryPath : undefined, emit);
+    gameActivities.select(xbox, status.capabilities.gameActivity ? status.binaryPath : undefined);
+    gameAchievements.select(xbox, status.capabilities.achievements ? status.binaryPath : undefined);
+    await accountProfile?.select(xbox, status.capabilities.profile ? status.binaryPath : undefined, emit);
   }, () => key === accountRefreshKey() && (!authState.running || afterAuth));
   if (emit) emitSnapshot();
   return structuredClone(authState);
@@ -647,7 +658,8 @@ function verifyOfflineDesignation(): void {
     .finally(() => { designationCheck = undefined; });
 }
 
-async function runAuth(command: 'login' | 'logout'): Promise<void> {
+async function runAuth(command: 'login' | 'logout', player = false): Promise<void> {
+  if (player && !backend.current.capabilities.playerAccount) throw Error('Update the Nexus backend in Settings to use a separate Xbox account.');
   ensureIdle();
   for(const prepare of nativeSocialBeforeAuth)await prepare();
   resetNativeSocial();
@@ -669,15 +681,16 @@ async function runAuth(command: 'login' | 'logout'): Promise<void> {
     if (shutdownStarted) throw Error('The launcher is closing.');
     await accountProfile.select(undefined);
     if (shutdownStarted) throw Error('The launcher is closing.');
-    const tracked = command === 'login' ? startAuthTransport(binary, view)
+    const tracked = command === 'login' ? startAuthTransport(binary, view, undefined, undefined, player)
       // Explicit sign-out removes the local device registration too. Ordinary
       // sign-in must keep it, including when renewing an existing account.
-      : spawnTracked(binary, ['logout', '--device'], { onLine: (line) => emitLog('auth', line) });
+      // Signing out only the Xbox player keeps the Store account and device.
+      : spawnTracked(binary, ['logout', player ? '--player' : '--device'], { onLine: (line) => emitLog('auth', line) });
     operations.set(id, tracked.child);
     const result = await tracked.result;
     accountRefresh.invalidate();
     // Another account signing in is caught before its first launch (bindOfflineAccess).
-    if (command === 'logout') await revokeOffline('sign-out');
+    if (command === 'logout' && !player) await revokeOffline('sign-out');
     if (result.code === 0) await refreshAccount(false, true);
     authState = {
       ...authState,
@@ -693,9 +706,9 @@ async function runAuth(command: 'login' | 'logout'): Promise<void> {
   }
 }
 
-function requestAuth(command: 'login' | 'logout'): Promise<void> {
+function requestAuth(command: 'login' | 'logout', player = false): Promise<void> {
   if (authJob) return Promise.reject(Error('A sign-in operation is already in progress.'));
-  const job = runAuth(command); authJob = job;
+  const job = runAuth(command, player); authJob = job;
   const clear = () => { if (authJob === job) authJob = undefined; };
   void job.then(clear, clear); return job;
 }
@@ -1121,7 +1134,7 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
   // Load them while the launch prepares instead of only using a library the
   // Library page happened to load; offline there is nothing to fetch.
   const ownedAccess = offlineLaunch ? undefined : accountLibrary.startLaunchAccess();
-  if (authState.stored === true && authState.username && await bindOfflineAccess(dataRoot, authState.username)) {
+  if (authState.stored === true && authState.username && await bindOfflineAccess(dataRoot, authState.username, authState.player)) {
     emitLog('offline', 'Removed stored offline licenses and identities (account-changed).');
   }
   const offlineRuntime = await offlineIdentityRuntime(wine);
@@ -1276,8 +1289,8 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
     const inviteRuntime=await gameInviteRuntime(wine);
     gameInviteUnavailableReason=!inviteRuntime?'The selected runtime does not support game invitations. Update the runtime and restart the game.':!titleId?'The game has no Xbox title information for invitations.':undefined;
     if(titleId&&/^[a-f0-9]{1,8}$/i.test(titleId)&&inviteRuntime){
-      const account=authState.username,epoch=xboxSocial.epoch;
-      const current=()=>!shutdownStarted&&authState.stored===true&&authState.username===account&&xboxSocial.epoch===epoch;
+      const account=xboxAccount(),epoch=xboxSocial.epoch;
+      const current=()=>!shutdownStarted&&authState.stored===true&&xboxAccount()===account&&xboxSocial.epoch===epoch;
       inviteBridge=new GameInviteBridge(operationId,game.title,String(parseInt(titleId,16)),current,emitSnapshot,()=>{void showFriends().catch(()=>{});},Date.now,sender=>{
         if(!Notification.isSupported())return;
         try{const notice=new Notification({title:nativeText('Game invitation'),body:nativeText(`${sender} invited you to ${game.title}. Open Friends to accept.`),urgency:'normal'});notice.on('click',()=>{void showFriends().catch(()=>{});});notice.on('failed',()=>{});notice.show();}catch{/* The dock remains available without desktop notifications. */}
@@ -1287,8 +1300,9 @@ async function prepareGameLaunch(id: string, steam?: SteamGameContext): Promise<
         environment.NEXUS_INVITE_PORT=String(inviteBridge.port);environment.NEXUS_INVITE_KEY=inviteBridge.key;
       }catch{await inviteBridge.stop().catch(()=>{});inviteBridge=undefined;gameInviteUnavailableReason='The game invitation connection could not be started. Restart the game to try again.';addGameLog('Optional game invitations are unavailable for this launch.');}
     }
-    // Names the account for the runtime's offline identity cache (an opaque key, never the username).
-    if (authState.stored === true && authState.username) environment.XODUS_ACCOUNT_HASH = accountCacheKey(authState.username);
+    // Names the Xbox account for the runtime's offline identity cache (an opaque key, never the username).
+    const xboxUser = xboxAccount();
+    if (authState.stored === true && xboxUser) environment.XODUS_ACCOUNT_HASH = accountCacheKey(xboxUser);
     if (protonRunner) addGameLog(`Proton prefix: ${protonRunner.compatibilityDataPath}/pfx`);
     else await fs.mkdir(legacyPrefixRoot, { recursive: true });
     steamSignal?.throwIfAborted();
@@ -1785,8 +1799,14 @@ function registerIpc(): void {
     if (!gameOperation?.logPath || gameOperation.id !== id) throw new Error('This diagnostic log is no longer available.');
     await copyDiagnosticFile(gameOperation.logPath, path.join(path.dirname(store.settings.runtimeRoot), 'logs'), text => clipboard.writeText(text));
   });
-  ipcMain.handle('login', () => requestAuth('login'));
-  ipcMain.handle('logout', () => requestAuth('logout'));
+  ipcMain.handle('login', async (_event, player: unknown) => {
+    if (player !== undefined && typeof player !== 'boolean') throw Error('Invalid sign-in request.');
+    return requestAuth('login', player === true);
+  });
+  ipcMain.handle('logout', async (_event, player: unknown) => {
+    if (player !== undefined && typeof player !== 'boolean') throw Error('Invalid sign-out request.');
+    return requestAuth('logout', player === true);
+  });
   ipcMain.handle('offline-permissions', async () => {
     if (offlinePermissionChanging) throw Error('Wait for the offline-permission change to finish.');
     if (authState.running || authState.stored !== true || !authState.username) throw Error('Sign in before changing offline permissions.');

@@ -66,7 +66,7 @@ describe('explicit account actions', () => {
     expect(context.prepareSystemWallet).toHaveBeenCalledOnce();
     expect(context.startAuthTransport).toHaveBeenCalledOnce();
     expect(context.xboxSocial.close).toHaveBeenCalledOnce();
-    expect(context.startAuthTransport).toHaveBeenCalledWith('/synthetic/backend', expect.any(Object));
+    expect(context.startAuthTransport).toHaveBeenCalledWith('/synthetic/backend', expect.any(Object), undefined, undefined, false);
     expect(context.spawnTracked).not.toHaveBeenCalled();
     expect(context.revokeOffline).not.toHaveBeenCalled();
     expect(context.authState).toMatchObject({ running: false, lastAction: 'login', lastResult: 'success' });

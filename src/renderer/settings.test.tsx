@@ -86,3 +86,31 @@ it('shows close-to-tray as an optional desktop preference',()=>{
  expect(html).toContain('Close to system tray');expect(html).toContain('Desktop mode only.');
  expect(html).toMatch(/type="checkbox"[^>]*checked=""/);
 });
+
+describe('separate Xbox account', () => {
+  const render = (playerAccount: boolean, player?: string) => {
+    const data = demoSnapshot();
+    data.backend.capabilities.playerAccount = playerAccount;
+    data.auth = { ...data.auth, stored: true, username: 'store@example.test', player };
+    return renderToStaticMarkup(<SettingsPage data={data} toast={() => {}} />);
+  };
+  it('stays hidden until the backend can keep a separate Xbox account', () => {
+    const html = render(false);
+    expect(html).not.toContain('Same as Store account');
+    expect(html).not.toContain('Use another Xbox account');
+  });
+  it('offers another Xbox account while Xbox features follow the Store account', () => {
+    const html = render(true);
+    expect(html).toMatch(/<dt>Store account<\/dt><dd>store@example.test<\/dd>/);
+    expect(html).toMatch(/<dt>Xbox account<\/dt><dd>Same as Store account<\/dd>/);
+    expect(html).toContain('Use another Xbox account');
+    expect(html).not.toContain('Use Store account for Xbox');
+  });
+  it('shows the separate Xbox account and how to return to the Store account', () => {
+    const html = render(true, 'player@example.test');
+    expect(html).toMatch(/<dt>Xbox account<\/dt><dd>player@example.test<\/dd>/);
+    expect(html).toContain('Use Store account for Xbox');
+    expect(html).not.toContain('Use another Xbox account');
+    expect(html).toContain('The Store account holds licenses and the library. Profile, cloud saves and achievements use the Xbox account.');
+  });
+});

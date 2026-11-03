@@ -1971,33 +1971,33 @@ function registerIpc(): void {
   ipcMain.handle('game-activity', async (_event, id: unknown, refresh = false) => {
     if (typeof refresh !== 'boolean') throw Error('Invalid activity request.');
     const target=gameDetailsTarget(id,store.games),market=currentMarket();
-    if (authState.running || authState.stored !== true || !authState.username) return { status: 'signed-out' };
+    if (authState.running || authState.stored !== true || !xboxAccount()) return { status: 'signed-out' };
     if (!backend.current.capabilities.gameActivity || !backend.current.binaryPath) return { status: 'unsupported' };
-    const account = authState.username, binary = backend.current.binaryPath;
+    const account = xboxAccount(), binary = backend.current.binaryPath;
     gameActivities.select(account, binary);
     let title:string|undefined;
     try{title=target.game?await installedTitleId(target.game.path):await catalog.gameDetails(target.productId!,market).then(details=>details?.xboxTitleId);}
     catch{return {status:'error'};}
     if (!title) return { status: 'unavailable' };
-    if (authState.running || authState.stored !== true || account !== authState.username || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
+    if (authState.running || authState.stored !== true || account !== xboxAccount() || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
     const activity = await gameActivities.get(title, refresh);
-    if (authState.running || authState.stored !== true || account !== authState.username || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
+    if (authState.running || authState.stored !== true || account !== xboxAccount() || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
     return activity;
   });
   ipcMain.handle('game-achievements', async (_event, id: unknown, refresh = false) => {
     if (typeof refresh !== 'boolean') throw Error('Invalid achievements request.');
     const target=gameDetailsTarget(id,store.games),market=currentMarket();
-    if (authState.running || authState.stored !== true || !authState.username) return { status: 'signed-out' };
+    if (authState.running || authState.stored !== true || !xboxAccount()) return { status: 'signed-out' };
     if (!backend.current.capabilities.achievements || !backend.current.binaryPath) return { status: 'unsupported' };
-    const account = authState.username, binary = backend.current.binaryPath;
+    const account = xboxAccount(), binary = backend.current.binaryPath;
     gameAchievements.select(account, binary);
     let title:string|undefined;
     try{title=target.game?await installedTitleId(target.game.path):await catalog.gameDetails(target.productId!,market).then(details=>details?.xboxTitleId);}
     catch{return {status:'error'};}
     if (!title) return { status: 'unavailable' };
-    if (authState.running || authState.stored !== true || account !== authState.username || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
+    if (authState.running || authState.stored !== true || account !== xboxAccount() || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
     const value = await gameAchievements.get(title, refresh);
-    if (authState.running || authState.stored !== true || account !== authState.username || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
+    if (authState.running || authState.stored !== true || account !== xboxAccount() || binary !== backend.current.binaryPath || !target.game&&market!==currentMarket()) return { status: 'error' };
     return value;
   });
   ipcMain.handle('launch-game', (_event, id: string) => launchGame(id));

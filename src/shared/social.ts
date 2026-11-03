@@ -1,3 +1,4 @@
+import type { AuthStatus } from './types.js';
 export interface XboxFriend { xuid: string; gamertag: string; presence: 'online' | 'offline' | 'unknown'; activity?: string; avatarUrl?: string }
 export interface XboxChatMessage { id: string; sender: string; at: string; text?: string; hidden: boolean }
 export interface XboxConversation { xuid: string; messages: XboxChatMessage[]; hasMore: boolean }
@@ -75,4 +76,9 @@ export function parseXboxConversation(value: unknown, expected: string): XboxCon
   });
   messages.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
   return {xuid:expected,messages,hasMore:v.hasMore};
+}
+
+/** Account Xbox social features act as: the separate Xbox player account when one is signed in. */
+export function xboxSocialAccount(auth: Pick<AuthStatus, 'stored' | 'running' | 'username' | 'player'>): string | undefined {
+  return auth.stored === true && !auth.running ? auth.player ?? auth.username : undefined;
 }

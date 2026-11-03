@@ -3,6 +3,7 @@ import type {AppSnapshot} from '../shared/types';
 import {XboxChat} from './XboxChat';
 import {ui,useInterfaceLanguage} from './i18n';
 import {watchChatDesktop} from './chat-desktop-snapshot';
+import {xboxSocialAccount} from '../shared/social';
 import './xbox-social.css';
 
 export function XboxChatDesktop({xuid}:{xuid:string}){
@@ -15,7 +16,7 @@ export function XboxChatDesktop({xuid}:{xuid:string}){
   return()=>document.removeEventListener('visibilitychange',visible);
  },[]);
  const auth=snapshot?.auth;
- const account=auth?.stored===true&&!auth.running?auth.username:undefined;
+ const account=auth?xboxSocialAccount(auth):undefined;
  const binary=snapshot?.backend.binaryPath;
  const supported=Boolean(snapshot?.backend.available&&snapshot.backend.capabilities.nativeSocial&&binary);
  const problems={account:ui('social.desktop_account_failed'),close:ui('social.desktop_close_failed'),profile:ui('social.desktop_profile_failed')};

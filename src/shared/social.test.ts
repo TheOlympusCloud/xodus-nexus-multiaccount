@@ -1,8 +1,14 @@
 import { describe,expect,it } from 'vitest';
-import { parseXboxFriends,parseXboxConversation,parseXboxMessageReceipt,xboxSubmissionInHistory,xboxUserId,xboxMessageText,xboxAvatarUrl,xboxSocialError,xboxSocialErrors } from './social.js';
+import { parseXboxFriends,parseXboxConversation,parseXboxMessageReceipt,xboxSubmissionInHistory,xboxUserId,xboxMessageText,xboxAvatarUrl,xboxSocialAccount,xboxSocialError,xboxSocialErrors } from './social.js';
 const friend={xuid:'42',gamertag:'<Example>',presence:'online',activity:'A game'};
 const message={id:'one',sender:'42',at:'2026-10-25T00:00:00Z',hidden:false,text:'<script>plain</script>'};
 describe('Xbox social boundaries',()=>{
+  it('acts as the separate Xbox player account when one is signed in',()=>{
+    expect(xboxSocialAccount({stored:true,running:false,username:'store',player:'player'})).toBe('player');
+    expect(xboxSocialAccount({stored:true,running:false,username:'store'})).toBe('store');
+    expect(xboxSocialAccount({stored:true,running:true,username:'store',player:'player'})).toBeUndefined();
+    expect(xboxSocialAccount({stored:null,running:false,username:'store',player:'player'})).toBeUndefined();
+  });
   it('keeps a real receipt without claiming delivery and rejects legacy boolean-only success',()=>{
     expect(parseXboxMessageReceipt({sent:true,messageId:'server-id',private:'ignored'})).toEqual({messageId:'server-id'});
     for(const value of [null,{sent:true},{sent:false,messageId:'id'},{sent:true,messageId:42},{sent:true,messageId:''},{sent:true,messageId:' '},{sent:true,messageId:'x'.repeat(129)},{sent:true,messageId:'bad\n'}])

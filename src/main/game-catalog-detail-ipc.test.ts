@@ -6,7 +6,9 @@ import {demoSnapshot} from '../shared/demo-data';
 import {gameDetailsTarget} from './game-details-target';
 const source=readFileSync(new URL('./index.ts',import.meta.url),'utf8');
 const start=source.indexOf("  ipcMain.handle('game-details'",source.indexOf('function registerIpc():'));
-const code=ts.transpileModule(source.slice(start,source.indexOf("  ipcMain.handle('launch-game'",start)),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+const parsed=ts.createSourceFile('index.ts',source,ts.ScriptTarget.Latest,true);
+const helper=parsed.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='xboxAccount')?.getText(parsed)??'';
+const code=ts.transpileModule(helper+'\n'+source.slice(start,source.indexOf("  ipcMain.handle('launch-game'",start)),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
 function fixture(){
  const handlers=new Map<string,Function>(),games=demoSnapshot().games;
  const authState={stored:true,running:false,username:'fixture-account'},backend={current:{binaryPath:'/fixture/cli',capabilities:{gameActivity:true,achievements:true}}};
@@ -48,4 +50,15 @@ it('rejects catalog metadata after a market change',async()=>{
  const f=fixture();let resolve!:(value:{productId:string})=>void;
  f.catalog.gameDetails.mockReturnValueOnce(new Promise(done=>resolve=done));const pending=f.call('game-details',{productId:'9AAAAAAAAAAA'});f.setMarket('CZ');resolve({productId:'9AAAAAAAAAAA'});
  await expect(pending).rejects.toThrow('market changed');
+});
+
+it.each(['game-activity','game-achievements'])('%s follows the separate Xbox player account and rejects a late player change',async route=>{
+ const f=fixture(),target={productId:'9AAAAAAAAAAA'},service=route==='game-activity'?f.gameActivities:f.gameAchievements;
+ Object.assign(f.authState,{player:'player-account'});
+ expect(await f.call(route,target)).toMatchObject({status:'available'});
+ expect(service.select).toHaveBeenCalledWith('player-account','/fixture/cli');
+ let resolve!:(value:{productId:string;xboxTitleId:string})=>void;
+ f.catalog.gameDetails.mockReturnValueOnce(new Promise(done=>resolve=done));
+ const late=f.call(route,target);Object.assign(f.authState,{player:'other-player'});resolve({productId:target.productId,xboxTitleId:'123'});
+ expect(await late).toEqual({status:'error'});
 });

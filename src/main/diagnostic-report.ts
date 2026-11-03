@@ -143,7 +143,7 @@ export async function createDiagnosticReport(input: {
       await appendLog(label, () => reportLog(path.join(input.logsRoot, `${game.id}-${suffix}.log`), input.logsRoot));
     }
   } else lines.push('', '## Game logs', '[No game selected]');
-  const privateValues = [...(input.privateValues ?? []), data.auth.username ?? '', data.auth.gamertag ?? ''];
+  const privateValues = [...(input.privateValues ?? []), data.auth.username ?? '', data.auth.player ?? '', data.auth.gamertag ?? ''];
   const content = redactDiagnosticText(lines.join('\n') + '\n', privateValues);
   validateReportContent(content);
   return { name: `nexus-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`, content };

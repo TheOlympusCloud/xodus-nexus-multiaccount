@@ -42,6 +42,14 @@ describe('reviewable diagnostic reports', () => {
     expect(content).not.toContain(input.snapshot.auth.username);
   });
 
+  it('redacts the separate Xbox player account as well as the Store account', async () => {
+    const input = base();
+    input.snapshot.auth.player = 'partner-handle';
+    input.snapshot.downloads = [{ ...input.snapshot.downloads[0], title: 'Queued for partner-handle', status: 'failed' as const }];
+    const { content } = await createDiagnosticReport(input);
+    expect(content).not.toContain('partner-handle');
+  });
+
   it('reports missing backend and logs honestly without requiring a running backend', async () => {
     const input = base(); input.snapshot.games = [{ ...input.snapshot.games[0], id: '0123456789abcdef' }];
     const { content } = await createDiagnosticReport({ ...input, gameId: '0123456789abcdef', backendLog: async () => { throw Error('/secret/backend'); } });

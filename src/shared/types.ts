@@ -10,6 +10,8 @@ export interface BackendCapabilities {
   nativeSocial?: boolean;
   login: boolean;
   externalAuth?: boolean;
+  /** `login --player`: a separate Xbox player account beside the Store account. */
+  playerAccount?: boolean;
   logout: boolean;
   download: boolean;
   streaming: boolean;

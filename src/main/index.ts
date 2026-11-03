@@ -65,7 +65,7 @@ import { acceptSteamHandoff, captureSteamLaunchEnvironment, offerSteamHandoff, s
   type SteamHandoff, type SteamLaunchEnvironment, type SteamLaunchLease } from './steam-launch-context.js';
 import { loadShortcutIcon } from './shortcut-icon.js';
 import { AccountProfile } from './account-profile.js';
-import { AccountRefresh, readAccount } from './account-refresh.js';
+import { AccountRefresh, parseAccount, readAccount } from './account-refresh.js';
 import { AccountLibrary } from './account-library.js';
 import { RecentPcGamePass } from './gamepass-recent.js';
 import { GameActivities, installedTitleId } from './game-activity.js';
@@ -519,20 +519,17 @@ async function refreshAccount(emit = true, afterAuth = false): Promise<AuthStatu
         next = { stored: null, username: undefined, note: 'Xodus could not read its system-keychain account record.' };
       } else {
         try {
-          const line = result.output.split('\n').map((entry) => entry.trim()).reverse().find((entry) => entry.startsWith('{'));
-          const account = JSON.parse(line ?? '') as { stored?: unknown; username?: unknown };
-          if (account.stored === true && typeof account.username === 'string' && account.username.trim()) {
+          const account = parseAccount(result.output);
+          if (account.stored) {
             next = {
               stored: true,
-              username: account.username.trim(),
+              username: account.username,
               note: runtime?.current.name?.includes('-xgamesave-pr28-')
                 ? 'Credentials are stored by Xodus. The experimental PR #28 runtime can try in-game Xbox sign-in and two-way cloud save sync; this account status alone does not verify either.'
                 : 'Credentials are stored by Xodus in the system keychain. This does not mean in-game Xbox platform sign-in is implemented.',
             };
-          } else if (account.stored === false) {
-            next = { stored: false, username: undefined, note: 'No Microsoft account is stored by Xodus.' };
           } else {
-            throw new Error('unexpected account response');
+            next = { stored: false, username: undefined, note: 'No Microsoft account is stored by Xodus.' };
           }
         } catch {
           next = { stored: null, username: undefined, note: 'Xodus returned an unreadable account-status response.' };

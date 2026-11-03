@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { AccountRefresh, readAccount } from './account-refresh.js';
+import { AccountRefresh, parseAccount, readAccount } from './account-refresh.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -77,4 +77,21 @@ process.exit(23);
     expect(JSON.parse(result.output)).toEqual({stored:true,username:'sample@example.test'});
     expect(performance.now()-start).toBeLessThan(1500);
   } finally {await fs.rm(root,{recursive:true,force:true});}
+});
+
+it('reads the separate Xbox player account only when asked', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-account-player-'));
+  const binary = path.join(root, 'cli');
+  try {
+    await fs.writeFile(binary, '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify(process.argv.slice(2)));\n', { mode: 0o700 });
+    expect(JSON.parse((await readAccount(binary, new AbortController().signal)).output)).toEqual(['account', '--json']);
+    expect(JSON.parse((await readAccount(binary, new AbortController().signal, true)).output)).toEqual(['account', '--json', '--player']);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+it('parses only a complete stored or signed-out account status', () => {
+  expect(parseAccount('diagnostic noise\n{"stored":true,"username":" player@example.test "}\n')).toEqual({ stored: true, username: 'player@example.test' });
+  expect(parseAccount('{"stored":false}')).toEqual({ stored: false });
+  for (const output of ['', 'not json', '{"stored":true}', '{"stored":true,"username":"  "}', '{"stored":"yes"}', '[]'])
+    expect(() => parseAccount(output)).toThrow();
 });

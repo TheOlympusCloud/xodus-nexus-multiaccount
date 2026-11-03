@@ -8,6 +8,7 @@ const fixture = String.raw`#!/usr/bin/env node
 const readline=require('node:readline');
 const out=value=>process.stdout.write('NEXUS_AUTH_V1 '+JSON.stringify(value)+'\n');
 const mode=process.env.FIXTURE_MODE;
+if(process.env.FIXTURE_ARGS)require('node:fs').writeFileSync(process.env.FIXTURE_ARGS,JSON.stringify(process.argv.slice(2)));
 if(mode==='no-handshake'){process.stdout.write('ordinary help\n');process.exit(0);}
 if(mode==='credential-failure'){
  process.stderr.write('synthetic-secret-must-not-be-logged\nNEXUS_CREDENTIAL_ERROR_V1 keyring-write-verification\n');process.exit(1);
@@ -42,6 +43,17 @@ describe('private auth transport', () => {
       }), { ...process.env, FIXTURE_MODE: 'success' }, 3000);
       if (incomplete) await expect(tracked.result).rejects.toThrow('did not complete its protocol');
       else expect((await tracked.result).code).toBe(0);
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+  it.each([false, true])('asks the backend for the separate Xbox account only when requested (%s)', async player => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-auth-player-'));
+    try {
+      const binary = path.join(root, 'cli'), args = path.join(root, 'args.json');
+      await fs.writeFile(binary, fixture, { mode: 0o755 });
+      const tracked = startAuthTransport(binary, send => ({ async open(frame) { send(frame.session, '{}'); }, close() {}, async context() {}, async dispose() {} }),
+        { ...process.env, FIXTURE_MODE: 'success', FIXTURE_ARGS: args }, 3000, player);
+      expect((await tracked.result).code).toBe(0);
+      expect(JSON.parse(await fs.readFile(args, 'utf8'))).toEqual(['--external-webview-stdio', 'login', ...(player ? ['--player'] : [])]);
     } finally { await fs.rm(root, { recursive: true, force: true }); }
   });
   it.each(['success', 'invalid', 'no-handshake', 'cancel', 'load-failure', 'credential-failure', 'unknown-credential'])('handles %s without exposing protocol output', async mode => {

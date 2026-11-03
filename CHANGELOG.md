@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Optionally use a separate Microsoft account for Xbox features (profile, cloud saves, achievements, friends) while the Store account keeps licenses and the library, as with separate Microsoft Store and Xbox app accounts on Windows. Requires a supporting Nexus backend.
 - Stop background update checks, keep game actions responsive, and queue updates while another game downloads.
 
 - Optionally keep Nexus and downloads running in the desktop system tray, with shortcuts to Home, Library, Store and Settings.

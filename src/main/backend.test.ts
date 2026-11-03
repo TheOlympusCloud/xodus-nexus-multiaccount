@@ -57,6 +57,22 @@ describe('prebuilt backend', () => {
       expect(status.capabilities.playerAccount).toBe(supported);
     } finally { await fs.rm(root, { recursive: true, force: true }); }
   });
+  it.each([
+    ['declares the current compatibility', { compatibility: backendLock.compatibility }, backendLock.compatibility],
+    ['declares an older compatibility', { compatibility: 'linux-run-v1' }, 'linux-run-v1'],
+    ['has no build-config.json', undefined, undefined],
+    ['has a malformed compatibility', { compatibility: 'anything' }, undefined],
+  ])('an external backend that %s reports its compatibility from build-config.json', async (_name, config, expected) => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-external-compat-'));
+    try {
+      const cli = path.join(root, 'target/release/xodus-cli'); await fs.mkdir(path.dirname(cli), { recursive: true });
+      await fs.writeFile(cli, elf(), { mode: 0o755 });
+      if (config) await fs.writeFile(path.join(root, 'build-config.json'), JSON.stringify(config));
+      const status = await new BackendManager(root, root, () => {}, () => false).refresh();
+      expect(status.source).toBe('external');
+      expect(status.linuxRunPatch).toBe(expected);
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
   it('reports a missing loader dependency instead of hiding it behind offline status (#328)',async()=>{
     const root=await fs.mkdtemp(path.join(os.tmpdir(),'nexus-backend-loader-'));
     try{

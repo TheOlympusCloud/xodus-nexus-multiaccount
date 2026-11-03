@@ -99,6 +99,14 @@ export class BackendManager {
     } catch { return undefined; }
   }
 
+  /** A backend checkout declares the Linux run contract it implements in build-config.json. */
+  private async externalCompatibility(root: string): Promise<string | undefined> {
+    try {
+      const config = JSON.parse(await fs.readFile(path.join(root, 'build-config.json'), 'utf8')) as { compatibility?: unknown };
+      return typeof config.compatibility === 'string' && /^linux-run-v\d+$/.test(config.compatibility) ? config.compatibility : undefined;
+    } catch { return undefined; }
+  }
+
   private async readPointer(): Promise<ManagedPointer | null> {
     try { return JSON.parse(await fs.readFile(this.pointerFile, 'utf8')) as ManagedPointer; } catch { return null; }
   }
@@ -136,7 +144,7 @@ export class BackendManager {
       Object.assign(this.status, {
         available: true, source: 'external', binaryPath: externalBinary,
         commit: await this.gitCommit(this.status.externalRoot), capabilities, blockReason: undefined,
-        linuxRunPatch: undefined,
+        linuxRunPatch: await this.externalCompatibility(this.status.externalRoot),
         version: undefined, delivery: undefined,
       });
     } else {
